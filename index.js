@@ -4,7 +4,7 @@ require("dotenv").config();
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const ADMIN_ID = 8750197296;
-const ADMIN_CHAT_ID = "@ceo_seoulflix";
+const ADMIN_CHAT_ID = "@seoulflix_baza";
 
 const serviceAccount = JSON.parse(
     Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, "base64").toString("utf-8")
