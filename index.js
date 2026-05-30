@@ -14,6 +14,7 @@ const ADMIN_CHAT_ID = "@seoulflix_baza";
 
 const CHANNELS = [
     "@seoulflixorg",
+    "@sengaatalganlari"
 ];
 
 /* =========================
