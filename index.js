@@ -258,7 +258,7 @@ bot.on("text", async (ctx) => {
         requestedAt: admin.firestore.Timestamp.now(),
     });
     await ctx.reply("⏳ Ushbu drama hozircha bazada mavjud emas.\n\n📌 So‘rovingiz adminlarga yuborildi!");
-    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi drama so‘rovi!*\n\n🎬 ${text}`, { parse_mode: "text" });
+    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi drama so‘rovi!*\n\n🎬 ${text}`);
 });
 
 
