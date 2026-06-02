@@ -43,7 +43,7 @@ async function checkSubscription(ctx) {
                 ]);
 
                 await ctx.reply(
-                    "❌ Botdan foydalanish uchun avval kanalga obuna bo‘ling 👇",
+                    "❌ Botdan foydalanish uchun iltimos avval kanalga obuna bo‘ling 👇",
                     Markup.inlineKeyboard(buttons)
                 );
 
