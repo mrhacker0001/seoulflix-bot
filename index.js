@@ -18,23 +18,20 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHANNELS = [
-    "@seoulflixorg",
-];
-
-const PRIVATE_CHANNEL_ID = -1002503433669;
+const PUBLIC_CHANNEL = "@seoulflixorg";
+const PRIVATE_CHANNEL = -1002503433669; // private kanal IDsi
 
 async function checkSubscription(ctx) {
     const userId = ctx.from.id;
 
     try {
         const publicMember = await bot.telegram.getChatMember(
-            CHANNELS,
+            PUBLIC_CHANNEL,
             userId
         );
 
         const privateMember = await bot.telegram.getChatMember(
-            PRIVATE_CHANNEL_ID,
+            PRIVATE_CHANNEL,
             userId
         );
 
@@ -50,8 +47,14 @@ async function checkSubscription(ctx) {
             Markup.inlineKeyboard([
                 [
                     Markup.button.url(
-                        "📢 Rasmiy kanal",
+                        "📢 Asosiy kanal",
                         "https://t.me/seoulflixorg"
+                    )
+                ],
+                [
+                    Markup.button.url(
+                        "🔒 Maxfiy kanal",
+                        "https://t.me/+5L3nSSMM-xE0ZjEy"
                     )
                 ],
                 [
@@ -64,7 +67,6 @@ async function checkSubscription(ctx) {
         );
 
         return false;
-
     } catch (err) {
         console.log("Subscription error:", err.message);
         return false;
@@ -106,19 +108,6 @@ bot.start(async (ctx) => {
         Markup.inlineKeyboard(buttons)
     );
 });
-
-bot.action("check_membership", async (ctx) => {
-    const subscribed = await checkSubscription(ctx);
-
-    if (subscribed) {
-        await ctx.reply(
-            "✅ Obuna tasdiqlandi! Endi botdan foydalanishingiz mumkin."
-        );
-    }
-
-    await ctx.answerCbQuery();
-});
-
 
 bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
