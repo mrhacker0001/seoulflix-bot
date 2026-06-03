@@ -20,7 +20,7 @@ const advData = {};
 
 const CHANNELS = [
     "@seoulflixorg",
-    "https://t.me/+5L3nSSMM-xE0ZjEy"
+
 ];
 
 async function checkSubscription(ctx) {
@@ -92,6 +92,10 @@ bot.start(async (ctx) => {
         "❌ Botdan foydalanish uchun avval rasmiy kanalimizga obuna bo‘ling 👇",
         Markup.inlineKeyboard(buttons)
     );
+});
+
+bot.on("channel_post", (ctx) => {
+    console.log(ctx.update.channel_post.chat);
 });
 
 bot.action("check_membership", async (ctx) => {
