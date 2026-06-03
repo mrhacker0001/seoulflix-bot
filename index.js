@@ -20,6 +20,7 @@ const advData = {};
 
 const CHANNELS = [
     "@seoulflixorg",
+    -1002503433669
 
 ];
 
