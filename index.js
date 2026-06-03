@@ -98,7 +98,7 @@ bot.start(async (ctx) => {
         Markup.keyboard(keyboard).resize()
     );
 
-    const buttons = CHANNELS.map((ch, i) =>
+    const buttons = PUBLIC_CHANNEL.map((ch, i) =>
         [Markup.button.url(`${i + 1} - kanal`, `https://t.me/${ch.replace("@", "")}`)]
     );
     buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
@@ -113,7 +113,7 @@ bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
     let notSubscribed = [];
 
-    for (const ch of CHANNELS) {
+    for (const ch of PUBLIC_CHANNEL) {
         try {
             const res = await bot.telegram.getChatMember(ch, userId);
             if (["left", "kicked"].includes(res.status)) {
