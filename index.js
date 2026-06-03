@@ -18,71 +18,49 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const PUBLIC_CHANNEL = "@seoulflixorg";
-const PRIVATE_CHANNEL = -1002503433669; // private kanal IDsi
+const CHANNELS = [
+    "@seoulflixorg",
+];
 
 async function checkSubscription(ctx) {
     const userId = ctx.from.id;
 
-    try {
-        const publicMember = await bot.telegram.getChatMember(
-            PUBLIC_CHANNEL,
-            userId
-        );
+    for (const ch of CHANNELS) {
+        try {
+            const member = await bot.telegram.getChatMember(ch, userId);
 
-        const privateMember = await bot.telegram.getChatMember(
-            PRIVATE_CHANNEL,
-            userId
-        );
+            if (["left", "kicked"].includes(member.status)) {
+                const buttons = CHANNELS.map((channel, i) => [
+                    Markup.button.url(
+                        `${i + 1} - kanal`,
+                        `https://t.me/${channel.replace("@", "")}`
+                    )
+                ]);
 
-        const publicOk = !["left", "kicked"].includes(publicMember.status);
-        const privateOk = !["left", "kicked"].includes(privateMember.status);
+                buttons.push([
+                    Markup.button.callback("✅ Tekshirish", "check_membership")
+                ]);
 
-        if (publicOk && privateOk) {
-            return true;
+                await ctx.reply(
+                    "❌ Botdan foydalanish uchun avval kanalga obuna bo‘ling 👇",
+                    Markup.inlineKeyboard(buttons)
+                );
+
+                return false;
+            }
+        } catch (err) {
+            console.log("Subscription check error:", err.message);
+            return false;
         }
-
-        await ctx.reply(
-            "❌ Botdan foydalanish uchun barcha kanallarga obuna bo‘ling 👇",
-            Markup.inlineKeyboard([
-                [
-                    Markup.button.url(
-                        "📢 Asosiy kanal",
-                        "https://t.me/seoulflixorg"
-                    )
-                ],
-                [
-                    Markup.button.url(
-                        "🔒 Maxfiy kanal",
-                        "https://t.me/+5L3nSSMM-xE0ZjEy"
-                    )
-                ],
-                [
-                    Markup.button.callback(
-                        "✅ Tekshirish",
-                        "check_membership"
-                    )
-                ]
-            ])
-        );
-
-        return false;
-    } catch (err) {
-        console.log("Subscription error:", err.message);
-        return false;
     }
+
+    return true;
 }
 
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const userRef = db.collection("users").doc(userId.toString());
     const doc = await userRef.get();
-    const subscribed = await checkSubscription(ctx);
-
-    if (!subscribed) return;
-
-    // foydalanuvchini bazaga yozish
-
 
     if (!doc.exists) {
         await userRef.set({
@@ -104,26 +82,10 @@ bot.start(async (ctx) => {
         Markup.keyboard(keyboard).resize()
     );
 
-    const buttons = [
-        [
-            Markup.button.url(
-                "📢 Asosiy kanal",
-                "https://t.me/seoulflixorg"
-            )
-        ],
-        [
-            Markup.button.url(
-                "🔒 Maxfiy kanal",
-                "https://t.me/+5L3nSSMM-xE0ZjEy"
-            )
-        ],
-        [
-            Markup.button.callback(
-                "✅ Tekshirish",
-                "check_membership"
-            )
-        ]
-    ];
+    const buttons = CHANNELS.map((ch, i) =>
+        [Markup.button.url(`${i + 1} - kanal`, `https://t.me/${ch.replace("@", "")}`)]
+    );
+    buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
 
     await ctx.reply(
         "❌ Botdan foydalanish uchun avval rasmiy kanalimizga obuna bo‘ling 👇",
@@ -133,39 +95,27 @@ bot.start(async (ctx) => {
 
 bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
+    let notSubscribed = [];
 
-    try {
-        const publicMember = await bot.telegram.getChatMember(
-            PUBLIC_CHANNEL,
-            userId
-        );
-
-        const privateMember = await bot.telegram.getChatMember(
-            PRIVATE_CHANNEL,
-            userId
-        );
-
-        const publicOk = !["left", "kicked"].includes(publicMember.status);
-        const privateOk = !["left", "kicked"].includes(privateMember.status);
-
-        if (publicOk && privateOk) {
-            await ctx.reply(
-                "✅ Ajoyib! Siz barcha kanallarga obuna bo'ldingiz.\n\nBotdan foydalanishingiz mumkin 🎉"
-            );
-        } else {
-            await ctx.reply(
-                "❌ Siz hali barcha kanallarga obuna bo'lmagansiz."
-            );
+    for (const ch of CHANNELS) {
+        try {
+            const res = await bot.telegram.getChatMember(ch, userId);
+            if (["left", "kicked"].includes(res.status)) {
+                notSubscribed.push(ch);
+            }
+        } catch (err) {
+            console.log(`Error checking ${ch}:`, err.message);
+            notSubscribed.push(ch);
         }
-
-        await ctx.answerCbQuery();
-
-    } catch (err) {
-        console.log(err);
-        await ctx.answerCbQuery(
-            "❌ Tekshirishda xatolik yuz berdi"
-        );
     }
+
+    if (notSubscribed.length === 0) {
+        await ctx.reply("✅ Ajoyib! Siz barcha rasmiy kanallarga obuna bo‘ldingiz.\n\nEndi SeoulFlix botidan to‘liq foydalanishingiz mumkin 🎉");
+    } else {
+        await ctx.reply("❌ Siz hali barcha kanalga obuna bo‘lmagansiz.\n\nDavom etish uchun quyidagi kanalga obuna bo‘ling 👇\n" + notSubscribed.join("\n"));
+    }
+
+    await ctx.answerCbQuery();
 });
 
 bot.on('video', async (ctx) => {
@@ -308,7 +258,7 @@ bot.on("text", async (ctx) => {
         requestedAt: admin.firestore.Timestamp.now(),
     });
     await ctx.reply("⏳ Ushbu drama hozircha bazada mavjud emas.\n\n📌 So‘rovingiz adminlarga yuborildi!");
-    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi drama so‘rovi!*\n\n🎬 ${text}`);
+    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi drama so‘rovi!*\n\n🎬 ${text}`, { parse_mode: "text" });
 });
 
 
