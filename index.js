@@ -94,9 +94,6 @@ bot.start(async (ctx) => {
     );
 });
 
-bot.on("channel_post", (ctx) => {
-    console.log(ctx.update.channel_post.chat);
-});
 
 bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
