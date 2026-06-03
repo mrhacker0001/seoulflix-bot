@@ -29,7 +29,7 @@ async function checkSubscription(ctx) {
 
     try {
         const publicMember = await bot.telegram.getChatMember(
-            PUBLIC_CHANNEL_ID,
+            CHANNELS,
             userId
         );
 
