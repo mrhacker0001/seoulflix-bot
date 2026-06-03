@@ -77,6 +77,12 @@ bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const userRef = db.collection("users").doc(userId.toString());
     const doc = await userRef.get();
+    const subscribed = await checkSubscription(ctx);
+
+    if (!subscribed) return;
+
+    // foydalanuvchini bazaga yozish
+
 
     if (!doc.exists) {
         await userRef.set({
@@ -98,10 +104,26 @@ bot.start(async (ctx) => {
         Markup.keyboard(keyboard).resize()
     );
 
-    const buttons = PUBLIC_CHANNEL.map((ch, i) =>
-        [Markup.button.url(`${i + 1} - kanal`, `https://t.me/${ch.replace("@", "")}`)]
-    );
-    buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
+    const buttons = [
+        [
+            Markup.button.url(
+                "📢 Asosiy kanal",
+                "https://t.me/seoulflixorg"
+            )
+        ],
+        [
+            Markup.button.url(
+                "🔒 Maxfiy kanal",
+                "https://t.me/+5L3nSSMM-xE0ZjEy"
+            )
+        ],
+        [
+            Markup.button.callback(
+                "✅ Tekshirish",
+                "check_membership"
+            )
+        ]
+    ];
 
     await ctx.reply(
         "❌ Botdan foydalanish uchun avval rasmiy kanalimizga obuna bo‘ling 👇",
@@ -111,27 +133,39 @@ bot.start(async (ctx) => {
 
 bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
-    let notSubscribed = [];
 
-    for (const ch of PUBLIC_CHANNEL) {
-        try {
-            const res = await bot.telegram.getChatMember(ch, userId);
-            if (["left", "kicked"].includes(res.status)) {
-                notSubscribed.push(ch);
-            }
-        } catch (err) {
-            console.log(`Error checking ${ch}:`, err.message);
-            notSubscribed.push(ch);
+    try {
+        const publicMember = await bot.telegram.getChatMember(
+            PUBLIC_CHANNEL,
+            userId
+        );
+
+        const privateMember = await bot.telegram.getChatMember(
+            PRIVATE_CHANNEL,
+            userId
+        );
+
+        const publicOk = !["left", "kicked"].includes(publicMember.status);
+        const privateOk = !["left", "kicked"].includes(privateMember.status);
+
+        if (publicOk && privateOk) {
+            await ctx.reply(
+                "✅ Ajoyib! Siz barcha kanallarga obuna bo'ldingiz.\n\nBotdan foydalanishingiz mumkin 🎉"
+            );
+        } else {
+            await ctx.reply(
+                "❌ Siz hali barcha kanallarga obuna bo'lmagansiz."
+            );
         }
-    }
 
-    if (notSubscribed.length === 0) {
-        await ctx.reply("✅ Ajoyib! Siz barcha rasmiy kanallarga obuna bo‘ldingiz.\n\nEndi SeoulFlix botidan to‘liq foydalanishingiz mumkin 🎉");
-    } else {
-        await ctx.reply("❌ Siz hali barcha kanalga obuna bo‘lmagansiz.\n\nDavom etish uchun quyidagi kanalga obuna bo‘ling 👇\n" + notSubscribed.join("\n"));
-    }
+        await ctx.answerCbQuery();
 
-    await ctx.answerCbQuery();
+    } catch (err) {
+        console.log(err);
+        await ctx.answerCbQuery(
+            "❌ Tekshirishda xatolik yuz berdi"
+        );
+    }
 });
 
 bot.on('video', async (ctx) => {
