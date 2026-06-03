@@ -20,43 +20,55 @@ const advData = {};
 
 const CHANNELS = [
     "@seoulflixorg",
-    -1002503433669
-
 ];
+
+const PRIVATE_CHANNEL_ID = -1002503433669;
 
 async function checkSubscription(ctx) {
     const userId = ctx.from.id;
 
-    for (const ch of CHANNELS) {
-        try {
-            const member = await bot.telegram.getChatMember(ch, userId);
+    try {
+        const publicMember = await bot.telegram.getChatMember(
+            PUBLIC_CHANNEL,
+            userId
+        );
 
-            if (["left", "kicked"].includes(member.status)) {
-                const buttons = CHANNELS.map((channel, i) => [
-                    Markup.button.url(
-                        `${i + 1} - kanal`,
-                        `https://t.me/${channel.replace("@", "")}`
-                    )
-                ]);
+        const privateMember = await bot.telegram.getChatMember(
+            PRIVATE_CHANNEL_ID,
+            userId
+        );
 
-                buttons.push([
-                    Markup.button.callback("✅ Tekshirish", "check_membership")
-                ]);
+        const publicOk = !["left", "kicked"].includes(publicMember.status);
+        const privateOk = !["left", "kicked"].includes(privateMember.status);
 
-                await ctx.reply(
-                    "❌ Botdan foydalanish uchun iltimos avval kanalga obuna bo‘ling 👇",
-                    Markup.inlineKeyboard(buttons)
-                );
-
-                return false;
-            }
-        } catch (err) {
-            console.log("Subscription check error:", err.message);
-            return false;
+        if (publicOk && privateOk) {
+            return true;
         }
-    }
 
-    return true;
+        await ctx.reply(
+            "❌ Botdan foydalanish uchun barcha kanallarga obuna bo‘ling 👇",
+            Markup.inlineKeyboard([
+                [
+                    Markup.button.url(
+                        "📢 Rasmiy kanal",
+                        "https://t.me/seoulflixorg"
+                    )
+                ],
+                [
+                    Markup.button.callback(
+                        "✅ Tekshirish",
+                        "check_membership"
+                    )
+                ]
+            ])
+        );
+
+        return false;
+
+    } catch (err) {
+        console.log("Subscription error:", err.message);
+        return false;
+    }
 }
 
 bot.start(async (ctx) => {
@@ -93,6 +105,18 @@ bot.start(async (ctx) => {
         "❌ Botdan foydalanish uchun avval rasmiy kanalimizga obuna bo‘ling 👇",
         Markup.inlineKeyboard(buttons)
     );
+});
+
+bot.action("check_membership", async (ctx) => {
+    const subscribed = await checkSubscription(ctx);
+
+    if (subscribed) {
+        await ctx.reply(
+            "✅ Obuna tasdiqlandi! Endi botdan foydalanishingiz mumkin."
+        );
+    }
+
+    await ctx.answerCbQuery();
 });
 
 
