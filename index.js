@@ -80,7 +80,7 @@ bot.start(async (ctx) => {
 
     try {
         await ctx.reply(
-            "🎬 SeoulFlix botiga xush kelibsiz!\n\nQuyidagi tugmalar orqali drama topishingiz yoki drama kodini yuborishingiz mumkin 👇",
+            "🎬 SeoulFlix botiga xush kelibsiz!\n\nQuyidagi tugmalar orqali istagan dramangizni topishingiz yoki drama kodini yuborishingiz mumkin 👇",
             Markup.keyboard(keyboard).resize()
         );
 
