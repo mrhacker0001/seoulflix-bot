@@ -78,20 +78,38 @@ bot.start(async (ctx) => {
         keyboard.push(["📢 Reklama yuborish", "👥 Obunachilar soni"]);
     }
 
-    ctx.reply(
-        "🎬 SeoulFlix botiga xush kelibsiz!\n\nQuyidagi tugmalar orqali drama topishingiz yoki drama kodini yuborishingiz mumkin 👇",
-        Markup.keyboard(keyboard).resize()
-    );
+    try {
+        await ctx.reply(
+            "🎬 SeoulFlix botiga xush kelibsiz!\n\nQuyidagi tugmalar orqali drama topishingiz yoki drama kodini yuborishingiz mumkin 👇",
+            Markup.keyboard(keyboard).resize()
+        );
 
-    const buttons = CHANNELS.map((ch, i) =>
-        [Markup.button.url(`${i + 1} - kanal`, `https://t.me/${ch.replace("@", "")}`)]
-    );
-    buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
+        const buttons = CHANNELS.map((ch, i) => [
+            Markup.button.url(
+                `${i + 1} - kanal`,
+                `https://t.me/${ch.replace("@", "")}`
+            )
+        ]);
 
-    await ctx.reply(
-        "❌ Botdan foydalanish uchun avval rasmiy kanalimizga obuna bo‘ling 👇",
-        Markup.inlineKeyboard(buttons)
-    );
+        buttons.push([
+            Markup.button.callback("✅ Tekshirish", "check_membership")
+        ]);
+
+        await ctx.reply(
+            "❌ Botdan foydalanish uchun avval rasmiy kanalimizga obuna bo‘ling 👇",
+            Markup.inlineKeyboard(buttons)
+        );
+
+    } catch (err) {
+        if (err.response?.error_code === 403) {
+            console.log(`${userId} botni bloklagan.`);
+
+            // Firestoredan foydalanuvchini o'chirish
+            await userRef.delete().catch(() => { });
+        } else {
+            console.error("START ERROR:", err);
+        }
+    }
 });
 
 bot.action("check_membership", async (ctx) => {
@@ -259,7 +277,17 @@ bot.on("text", async (ctx) => {
         requestedAt: admin.firestore.Timestamp.now(),
     });
     await ctx.reply("⏳ Ushbu drama hozircha bazada mavjud emas.\n\n📌 So‘rovingiz adminlarga yuborildi!");
-    bot.telegram.sendMessage(ADMIN_CHAT_ID, `📌 *Yangi drama so‘rovi!*\n\n🎬 ${text}`,);
+    try {
+        await bot.telegram.sendMessage(
+            ADMIN_CHAT_ID,
+            `📌 *Yangi drama so‘rovi!*\n\n🎬 ${text}`,
+            {
+                parse_mode: "Markdown"
+            }
+        );
+    } catch (err) {
+        console.error(err);
+    }
 });
 
 
@@ -284,14 +312,16 @@ bot.action("confirm_adv_text", async (ctx) => {
             await bot.telegram.sendMessage(user.userId, adv.caption, { parse_mode: "Markdown" });
             success++;
         } catch (error) {
-            failed++;
-            console.error(`Xatolik (${user.userId}): ${error.message}`);
-            if (
-                error.message.includes("bot was blocked") ||
-                error.message.includes("user is deactivated")
-            ) {
-                await db.collection("users").doc(user.userId.toString()).delete();
+
+            if (error.response?.error_code === 403) {
+                await db.collection("users")
+                    .doc(user.userId.toString())
+                    .delete();
+
+                console.log(`${user.userId} bazadan o'chirildi`);
             }
+
+            failed++;
         }
     }
 
@@ -324,6 +354,24 @@ bot.action("cancel_adv", async (ctx) => {
     await ctx.reply("❌ Reklama yuborish bekor qilindi.");
     delete userStates[userId];
     delete advData[userId];
+});
+
+bot.catch(async (err, ctx) => {
+    console.error("BOT ERROR:");
+
+    console.error(err);
+
+    if (err.response?.error_code === 403) {
+
+        const id = ctx?.from?.id;
+
+        if (id) {
+            await db.collection("users")
+                .doc(id.toString())
+                .delete()
+                .catch(() => { });
+        }
+    }
 });
 
 // Botni ishga tushiramiz
