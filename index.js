@@ -20,7 +20,7 @@ const advData = {};
 
 const CHANNELS = [
     "@seoulflixorg",
-    "@nazoratdan_chiqqan_lahza"
+    "+FdHOW7OwsJY5ZDI6"
 ];
 
 async function checkSubscription(ctx) {
