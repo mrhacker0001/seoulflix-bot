@@ -24,6 +24,7 @@ const CHANNELS = [
 ];
 
 async function checkSubscription(ctx) {
+    return true;
     const userId = ctx.from.id;
 
     for (const ch of CHANNELS) {
@@ -47,11 +48,11 @@ async function checkSubscription(ctx) {
                     Markup.inlineKeyboard(buttons)
                 );
 
-                return true;
+                return false;
             }
         } catch (err) {
             console.log("Subscription check error:", err.message);
-            return true;
+            return false;
         }
     }
 
