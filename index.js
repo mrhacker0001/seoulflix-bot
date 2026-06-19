@@ -47,11 +47,11 @@ async function checkSubscription(ctx) {
                     Markup.inlineKeyboard(buttons)
                 );
 
-                return false;
+                return true;
             }
         } catch (err) {
             console.log("Subscription check error:", err.message);
-            return false;
+            return true;
         }
     }
 
