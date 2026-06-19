@@ -18,25 +18,32 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHANNELS = [
-    "@seoulflixorg",
-    "+FdHOW7OwsJY5ZDI6"
+const CHECK_CHANNELS = [
+    "@seoulflixorg"
+];
+
+const SHOW_CHANNELS = [
+    {
+        name: "1 - Asosiy kanal",
+        url: "https://t.me/seoulflixorg"
+    },
+    {
+        name: "2 - Premium kanal",
+        url: "https://t.me/+FdHOW7OwsJY5ZDI6"
+    }
 ];
 
 async function checkSubscription(ctx) {
-    return true;
     const userId = ctx.from.id;
 
-    for (const ch of CHANNELS) {
+    for (const ch of CHECK_CHANNELS) {
         try {
             const member = await bot.telegram.getChatMember(ch, userId);
 
             if (["left", "kicked"].includes(member.status)) {
-                const buttons = CHANNELS.map((channel, i) => [
-                    Markup.button.url(
-                        `${i + 1} - kanal`,
-                        `https://t.me/${channel.replace("@", "")}`
-                    )
+
+                const buttons = SHOW_CHANNELS.map(channel => [
+                    Markup.button.url(channel.name, channel.url)
                 ]);
 
                 buttons.push([
@@ -44,14 +51,15 @@ async function checkSubscription(ctx) {
                 ]);
 
                 await ctx.reply(
-                    "❌ Botdan foydalanish uchun avval kanalga obuna bo‘ling 👇",
+                    "❌ Botdan foydalanish uchun quyidagi kanallarga obuna bo‘ling 👇",
                     Markup.inlineKeyboard(buttons)
                 );
 
                 return false;
             }
+
         } catch (err) {
-            console.log("Subscription check error:", err.message);
+            console.log(err.message);
             return false;
         }
     }
@@ -85,12 +93,18 @@ bot.start(async (ctx) => {
             Markup.keyboard(keyboard).resize()
         );
 
-        const buttons = CHANNELS.map((ch, i) => [
-            Markup.button.url(
-                `${i + 1} - kanal`,
-                `https://t.me/${ch.replace("@", "")}`
-            )
+        const buttons = SHOW_CHANNELS.map(channel => [
+            Markup.button.url(channel.name, channel.url)
         ]);
+
+        buttons.push([
+            Markup.button.callback("✅ Tekshirish", "check_membership")
+        ]);
+
+        await ctx.reply(
+            "❌ Botdan foydalanish uchun quyidagi kanallarga obuna bo‘ling 👇",
+            Markup.inlineKeyboard(buttons)
+        );
 
         buttons.push([
             Markup.button.callback("✅ Tekshirish", "check_membership")
@@ -117,24 +131,37 @@ bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
     let notSubscribed = [];
 
-    for (const ch of CHANNELS) {
+    for (const ch of CHECK_CHANNELS) {
         try {
             const res = await bot.telegram.getChatMember(ch, userId);
+
             if (["left", "kicked"].includes(res.status)) {
                 notSubscribed.push(ch);
             }
+
         } catch (err) {
-            console.log(`Error checking ${ch}:`, err.message);
             notSubscribed.push(ch);
         }
     }
 
     if (notSubscribed.length === 0) {
-        await ctx.reply("✅ Ajoyib! Siz barcha rasmiy kanallarga obuna bo‘ldingiz.\n\nEndi SeoulFlix botidan to‘liq foydalanishingiz mumkin 🎉");
-    } 
-    else {
-        await ctx.reply("✅ Ajoyib! Siz barcha rasmiy kanallarga obuna bo‘ldingiz.\n\nEndi SeoulFlix botidan to‘liq foydalanishingiz mumkin 🎉");
-        // await ctx.reply("❌ Siz hali barcha kanalga obuna bo‘lmagansiz.\n\nDavom etish uchun quyidagi kanalga obuna bo‘ling 👇\n" + notSubscribed.join("\n"));
+        await ctx.reply(
+            "✅ Ajoyib! Siz botdan foydalanishingiz mumkin 🎉"
+        );
+    } else {
+
+        const buttons = SHOW_CHANNELS.map(channel => [
+            Markup.button.url(channel.name, channel.url)
+        ]);
+
+        buttons.push([
+            Markup.button.callback("✅ Tekshirish", "check_membership")
+        ]);
+
+        await ctx.reply(
+            "❌ Siz hali asosiy kanalga obuna bo‘lmagansiz.",
+            Markup.inlineKeyboard(buttons)
+        );
     }
 
     await ctx.answerCbQuery();
