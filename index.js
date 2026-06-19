@@ -131,8 +131,10 @@ bot.action("check_membership", async (ctx) => {
 
     if (notSubscribed.length === 0) {
         await ctx.reply("✅ Ajoyib! Siz barcha rasmiy kanallarga obuna bo‘ldingiz.\n\nEndi SeoulFlix botidan to‘liq foydalanishingiz mumkin 🎉");
-    } else {
-        await ctx.reply("❌ Siz hali barcha kanalga obuna bo‘lmagansiz.\n\nDavom etish uchun quyidagi kanalga obuna bo‘ling 👇\n" + notSubscribed.join("\n"));
+    } 
+    else {
+        await ctx.reply("✅ Ajoyib! Siz barcha rasmiy kanallarga obuna bo‘ldingiz.\n\nEndi SeoulFlix botidan to‘liq foydalanishingiz mumkin 🎉");
+        // await ctx.reply("❌ Siz hali barcha kanalga obuna bo‘lmagansiz.\n\nDavom etish uchun quyidagi kanalga obuna bo‘ling 👇\n" + notSubscribed.join("\n"));
     }
 
     await ctx.answerCbQuery();
