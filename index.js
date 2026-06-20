@@ -28,6 +28,10 @@ const SHOW_CHANNELS = [
         name: "1 - Asosiy kanal",
         url: "https://t.me/seoulflixorg"
     },
+    {
+        name: "2 - Asosiy kanal",
+        url: "https://t.me/shun_chaki_xotira"
+    },
     // {
     //     name: "2 - Premium kanal",
     //     url: "https://t.me/+FdHOW7OwsJY5ZDI6"
