@@ -19,7 +19,8 @@ const userStates = {};
 const advData = {};
 
 const CHECK_CHANNELS = [
-    "@seoulflixorg"
+    "@seoulflixorg",
+    "@shun_chaki_xotira"
 ];
 
 const SHOW_CHANNELS = [
@@ -27,10 +28,10 @@ const SHOW_CHANNELS = [
         name: "1 - Asosiy kanal",
         url: "https://t.me/seoulflixorg"
     },
-    {
-        name: "2 - Premium kanal",
-        url: "https://t.me/+FdHOW7OwsJY5ZDI6"
-    }
+    // {
+    //     name: "2 - Premium kanal",
+    //     url: "https://t.me/+FdHOW7OwsJY5ZDI6"
+    // }
 ];
 
 async function checkSubscription(ctx) {
