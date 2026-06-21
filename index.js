@@ -20,12 +20,17 @@ const advData = {};
 
 const CHECK_CHANNELS = [
     "@seoulflixorg",
+    "@Sabr_voices"
 ];
 
 const SHOW_CHANNELS = [
     {
         name: "1 - Asosiy kanal",
         url: "https://t.me/seoulflixorg"
+    },
+    {
+        name: "1 - Asosiy kanal",
+        url: "https://t.me/Sabr_voices"
     },
 
 ];
