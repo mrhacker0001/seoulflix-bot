@@ -19,24 +19,23 @@ const userStates = {};
 const advData = {};
 
 const CHECK_CHANNELS = ["@seoulflixorg", "@izohsiz_822"];
-
 const SHOW_CHANNELS = [
     { name: "1 - Asosiy kanal", url: "https://t.me/seoulflixorg" },
     { name: "2 - Asosiy kanal", url: "https://t.me/izohsiz_822" },
 ];
 
+// ─────────────────────────────────────────────
+// YORDAMCHI FUNKSIYALAR
+// ─────────────────────────────────────────────
+
 async function checkSubscription(ctx) {
     const userId = ctx.from.id;
-
     for (const ch of CHECK_CHANNELS) {
         try {
             const member = await bot.telegram.getChatMember(ch, userId);
             if (["left", "kicked"].includes(member.status)) {
-                const buttons = SHOW_CHANNELS.map(channel => [
-                    Markup.button.url(channel.name, channel.url)
-                ]);
+                const buttons = SHOW_CHANNELS.map(ch => [Markup.button.url(ch.name, ch.url)]);
                 buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
-
                 await ctx.reply(
                     "❌ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling 👇",
                     Markup.inlineKeyboard(buttons)
@@ -44,20 +43,66 @@ async function checkSubscription(ctx) {
                 return false;
             }
         } catch (err) {
-            console.log(err.message);
+            console.log("checkSubscription error:", err.message);
             return false;
         }
     }
     return true;
 }
 
-// ✅ VIEW COUNTER yordamchi funksiya
 async function incrementViewCount(filmId) {
     const filmRef = db.collection("films").doc(filmId);
-    await filmRef.update({
-        views: admin.firestore.FieldValue.increment(1)
-    });
+    await filmRef.update({ views: admin.firestore.FieldValue.increment(1) });
 }
+
+// Reklamani barcha foydalanuvchilarga yuborish
+async function sendAdvToAll(ctx, adv) {
+    const usersSnapshot = await db.collection("users").get();
+    let success = 0, failed = 0;
+
+    for (const docSnap of usersSnapshot.docs) {
+        const user = docSnap.data();
+        const uid = user.userId;
+        try {
+            if (adv.type === "text") {
+                await bot.telegram.sendMessage(uid, adv.text, { parse_mode: "HTML" });
+
+            } else if (adv.type === "photo") {
+                await bot.telegram.sendPhoto(uid, adv.fileId, {
+                    caption: adv.caption || "",
+                    parse_mode: "HTML"
+                });
+
+            } else if (adv.type === "video") {
+                await bot.telegram.sendVideo(uid, adv.fileId, {
+                    caption: adv.caption || "",
+                    parse_mode: "HTML"
+                });
+
+            } else if (adv.type === "animation") {
+                await bot.telegram.sendAnimation(uid, adv.fileId, {
+                    caption: adv.caption || "",
+                    parse_mode: "HTML"
+                });
+            }
+            success++;
+        } catch (error) {
+            if (error.response?.error_code === 403) {
+                await db.collection("users").doc(uid.toString()).delete().catch(() => { });
+                console.log(`${uid} bazadan o'chirildi (bloklagan)`);
+            }
+            failed++;
+        }
+    }
+
+    await ctx.reply(
+        `✅ Reklama yuborish yakunlandi!\n\n🟢 Muvaffaqiyatli: ${success} ta\n🔴 Xatolik: ${failed} ta`
+    );
+}
+
+// ─────────────────────────────────────────────
+// START
+// ─────────────────────────────────────────────
 
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
@@ -85,12 +130,8 @@ bot.start(async (ctx) => {
             Markup.keyboard(keyboard).resize()
         );
 
-        // ✅ FIX: faqat BIR MARTA subscription xabari yuboriladi
-        const buttons = SHOW_CHANNELS.map(channel => [
-            Markup.button.url(channel.name, channel.url)
-        ]);
+        const buttons = SHOW_CHANNELS.map(ch => [Markup.button.url(ch.name, ch.url)]);
         buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
-
         await ctx.reply(
             "❌ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling 👇",
             Markup.inlineKeyboard(buttons)
@@ -105,17 +146,19 @@ bot.start(async (ctx) => {
     }
 });
 
+// ─────────────────────────────────────────────
+// OBUNA TEKSHIRISH
+// ─────────────────────────────────────────────
+
 bot.action("check_membership", async (ctx) => {
     const userId = ctx.from.id;
-    let notSubscribed = [];
+    const notSubscribed = [];
 
     for (const ch of CHECK_CHANNELS) {
         try {
             const res = await bot.telegram.getChatMember(ch, userId);
-            if (["left", "kicked"].includes(res.status)) {
-                notSubscribed.push(ch);
-            }
-        } catch (err) {
+            if (["left", "kicked"].includes(res.status)) notSubscribed.push(ch);
+        } catch {
             notSubscribed.push(ch);
         }
     }
@@ -123,42 +166,115 @@ bot.action("check_membership", async (ctx) => {
     if (notSubscribed.length === 0) {
         await ctx.reply("✅ Ajoyib! Siz botdan foydalanishingiz mumkin 🎉");
     } else {
-        const buttons = SHOW_CHANNELS.map(channel => [
-            Markup.button.url(channel.name, channel.url)
-        ]);
+        const buttons = SHOW_CHANNELS.map(ch => [Markup.button.url(ch.name, ch.url)]);
         buttons.push([Markup.button.callback("✅ Tekshirish", "check_membership")]);
-
-        await ctx.reply(
-            "❌ Siz hali asosiy kanalga obuna bo'lmagansiz.",
-            Markup.inlineKeyboard(buttons)
-        );
+        await ctx.reply("❌ Siz hali kanallarga obuna bo'lmagansiz.", Markup.inlineKeyboard(buttons));
     }
     await ctx.answerCbQuery();
 });
 
+// ─────────────────────────────────────────────
+// ADMIN: VIDEO FILE ID OLISH
+// ─────────────────────────────────────────────
+
 bot.on("video", async (ctx) => {
     const userId = ctx.from.id;
-    if (userId !== ADMIN_ID) return ctx.reply("❌ Ushbu bo'lim faqat adminlar uchun.");
 
-    const fileId = ctx.message.video.file_id;
-    await ctx.reply(
-        `✅ Video muvaffaqiyatli qabul qilindi!\n\n📁 File ID:\n<code>${fileId}</code>\n\n💾 Ushbu ID'ni Firestore bazasiga saqlashingiz mumkin.`,
-        { parse_mode: "HTML" }
-    );
+    // Admin reklama uchun video yuborayotgan bo'lsa
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_adv_media") {
+        const fileId = ctx.message.video.file_id;
+        const caption = ctx.message.caption || "";
+        advData[userId] = { type: "video", fileId, caption };
+        userStates[userId] = "waiting_for_adv_confirm";
+
+        return ctx.reply(
+            `📹 Video qabul qilindi!\n\n❓ Ushbu reklamani barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?`,
+            Markup.inlineKeyboard([
+                [Markup.button.callback("✅ Ha, yuborish", "confirm_adv")],
+                [Markup.button.callback("❌ Bekor qilish", "cancel_adv_text")]
+            ])
+        );
+    }
+
+    // Aks holda: kino bazasi uchun file_id olish
+    if (userId === ADMIN_ID) {
+        const fileId = ctx.message.video.file_id;
+        return ctx.reply(
+            `✅ Video qabul qilindi!\n\n📁 File ID:\n<code>${fileId}</code>`,
+            { parse_mode: "HTML" }
+        );
+    }
+
+    return ctx.reply("❌ Ushbu bo'lim faqat adminlar uchun.");
 });
+
+// ─────────────────────────────────────────────
+// ADMIN: RASM REKLAMA
+// ─────────────────────────────────────────────
+
+bot.on("photo", async (ctx) => {
+    const userId = ctx.from.id;
+    if (userId !== ADMIN_ID) return;
+
+    if (userStates[userId] === "waiting_for_adv_media") {
+        const fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        const caption = ctx.message.caption || "";
+        advData[userId] = { type: "photo", fileId, caption };
+        userStates[userId] = "waiting_for_adv_confirm";
+
+        return ctx.reply(
+            `🖼 Rasm qabul qilindi!\n\n❓ Ushbu reklamani barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?`,
+            Markup.inlineKeyboard([
+                [Markup.button.callback("✅ Ha, yuborish", "confirm_adv")],
+                [Markup.button.callback("❌ Bekor qilish", "cancel_adv_text")]
+            ])
+        );
+    }
+});
+
+// ─────────────────────────────────────────────
+// ADMIN: ANIMATION (GIF) REKLAMA
+// ─────────────────────────────────────────────
+
+bot.on("animation", async (ctx) => {
+    const userId = ctx.from.id;
+    if (userId !== ADMIN_ID) return;
+
+    if (userStates[userId] === "waiting_for_adv_media") {
+        const fileId = ctx.message.animation.file_id;
+        const caption = ctx.message.caption || "";
+        advData[userId] = { type: "animation", fileId, caption };
+        userStates[userId] = "waiting_for_adv_confirm";
+
+        return ctx.reply(
+            `🎞 GIF qabul qilindi!\n\n❓ Ushbu reklamani barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?`,
+            Markup.inlineKeyboard([
+                [Markup.button.callback("✅ Ha, yuborish", "confirm_adv")],
+                [Markup.button.callback("❌ Bekor qilish", "cancel_adv_text")]
+            ])
+        );
+    }
+});
+
+// ─────────────────────────────────────────────
+// ADMIN TUGMALARI
+// ─────────────────────────────────────────────
 
 bot.hears("📢 Reklama yuborish", async (ctx) => {
     const userId = ctx.from.id;
     if (userId !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
 
-    userStates[userId] = "waiting_for_adv_text";
-    await ctx.reply("📝 Reklama postini yuboring.\n\nLink, matn yoki promo xabar bo'lishi mumkin 👇");
+    userStates[userId] = "waiting_for_adv_media";
+    await ctx.reply(
+        "📢 *Reklama yuborish*\n\nReklama postini yuboring:\n\n• 📝 Matn\n• 🖼 Rasm (caption bilan yoki sutsiz)\n• 📹 Video (caption bilan yoki sutsiz)\n• 🎞 GIF\n\n_HTML teglari ishlaydi: <b>bold</b>, <i>italic</i>, <a href='url'>link</a>_",
+        { parse_mode: "Markdown" }
+    );
 });
 
 bot.hears("👥 Obunachilar soni", async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
     const snapshot = await db.collection("users").get();
-    await ctx.reply(`📊 Hozircha botda *${snapshot.size}* ta foydalanuvchi mavjud.`, {
+    await ctx.reply(`📊 Botda jami *${snapshot.size}* ta foydalanuvchi mavjud.`, {
         parse_mode: "Markdown"
     });
 });
@@ -168,13 +284,13 @@ bot.hears("📜 Kino roʻyxati", async (ctx) => {
     if (!subscribed) return;
 
     const snapshot = await db.collection("films").get();
-    if (snapshot.empty) return ctx.reply("❌ Hozircha bot bazasiga hech qanday drama qo'shilmagan.");
+    if (snapshot.empty) return ctx.reply("❌ Hozircha bazaga hech qanday drama qo'shilmagan.");
 
     let message = "🎬 *SeoulFlix Drama Ro'yxati*\n";
     snapshot.forEach((doc) => {
         const film = doc.data();
-        // ✅ Ko'rilgan soni ro'yxatda ham chiqadi
-        message += `\n🎬 *${film.title}* — Kod: \`${doc.id}\``;
+        const views = film.views || 0;
+        message += `\n🎬 *${film.title}* — Kod: \`${doc.id}\` | 👁 ${views}`;
     });
     await ctx.reply(message, { parse_mode: "Markdown" });
 });
@@ -182,41 +298,45 @@ bot.hears("📜 Kino roʻyxati", async (ctx) => {
 bot.hears("🔍 Kino izlash", async (ctx) => {
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) return;
-
     ctx.reply("🔎 Drama kodini yuboring yoki nomini yozing 👇");
 });
+
+// ─────────────────────────────────────────────
+// TEXT HANDLER
+// ─────────────────────────────────────────────
 
 bot.on("text", async (ctx) => {
     const userId = ctx.from.id;
     const text = ctx.message.text.trim();
 
-    // ✅ FIX: reklama state BIRINCHI tekshiriladi, subscription dan OLDIN
-    if (userStates[userId] === "waiting_for_adv_text" && userId === ADMIN_ID) {
-        advData[userId] = { caption: text };
-        userStates[userId] = "waiting_for_text_confirm";
+    // Klaviatura tugmalarini o'tkazib yuborish
+    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni"];
+    if (keyboardButtons.includes(text)) return;
+
+    // ── ADMIN: matnli reklama qabul qilish ──
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_adv_media") {
+        advData[userId] = { type: "text", text };
+        userStates[userId] = "waiting_for_adv_confirm";
 
         return ctx.reply(
-            "❓ Reklamani yuborishni tasdiqlaysizmi?",
+            `📝 Matn qabul qilindi!\n\n"${text}"\n\n❓ Ushbu reklamani barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?`,
             Markup.inlineKeyboard([
-                Markup.button.callback("✅ Ha", "confirm_adv_text"),
-                Markup.button.callback("❌ Yo'q", "cancel_adv_text")
+                [Markup.button.callback("✅ Ha, yuborish", "confirm_adv")],
+                [Markup.button.callback("❌ Bekor qilish", "cancel_adv_text")]
             ])
         );
     }
 
-    // Subscription tekshiruvi (oddiy foydalanuvchilar uchun)
+    // ── Oddiy foydalanuvchi: obuna tekshiruvi ──
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) return;
 
-    // Kino kodi yoki nomi bo'yicha qidiruv
+    // ── Kino kodi bilan qidiruv ──
     const filmDoc = await db.collection("films").doc(text).get();
     if (filmDoc.exists) {
         const film = filmDoc.data();
-
         try {
-            // ✅ Ko'rilgan sonini oshiramiz
             await incrementViewCount(text);
-
             const updatedViews = (film.views || 0) + 1;
 
             let caption = "";
@@ -227,7 +347,6 @@ bot.on("text", async (ctx) => {
             if (film.language) caption += `🌐 *Til:* ${film.language}\n`;
             if (film.genre) caption += `📄 *Janr:* ${film.genre}\n`;
             if (film.description) caption += `\n📕 *Tavsifi:*\n${film.description}\n`;
-            // ✅ Ko'rilgan soni captionda ham ko'rinadi
             caption += `\n👁 *Ko'rilgan:* ${updatedViews} marta`;
 
             await ctx.replyWithVideo(film.video_link, {
@@ -242,7 +361,7 @@ bot.on("text", async (ctx) => {
         return;
     }
 
-    // Kino topilmasa so'rov saqlanadi
+    // ── Topilmasa so'rov yuborish ──
     await db.collection("requests").add({
         title: text,
         requestedAt: admin.firestore.Timestamp.now(),
@@ -255,47 +374,34 @@ bot.on("text", async (ctx) => {
             { parse_mode: "Markdown" }
         );
     } catch (err) {
-        console.error(err);
+        console.error("Admin chatga yuborishda xatolik:", err);
     }
 });
 
-bot.action("confirm_adv_text", async (ctx) => {
+// ─────────────────────────────────────────────
+// CALLBACK: REKLAMA TASDIQLASH / BEKOR QILISH
+// ─────────────────────────────────────────────
+
+bot.action("confirm_adv", async (ctx) => {
     const userId = ctx.from.id;
-    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_text_confirm") {
+
+    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_adv_confirm") {
         return ctx.answerCbQuery("❌ Ruxsat yo'q yoki amal muddati o'tgan.");
     }
 
-    await ctx.answerCbQuery("Reklama yuborilmoqda...");
+    await ctx.answerCbQuery("⏳ Reklama yuborilmoqda...");
+    await ctx.reply("⏳ Reklama yuborilmoqda, iltimos kuting...");
+
     const adv = advData[userId];
-    const usersSnapshot = await db.collection("users").get();
-
-    let success = 0;
-    let failed = 0;
-
-    for (const doc of usersSnapshot.docs) {
-        const user = doc.data();
-        try {
-            await bot.telegram.sendMessage(user.userId, adv.caption, { parse_mode: "Markdown" });
-            success++;
-        } catch (error) {
-            if (error.response?.error_code === 403) {
-                await db.collection("users").doc(user.userId.toString()).delete();
-                console.log(`${user.userId} bazadan o'chirildi`);
-            }
-            failed++;
-        }
-    }
-
-    await ctx.reply(`✅ Reklama muvaffaqiyatli yuborildi!\n\n🟢 Yuborildi: ${success} ta\n🔴 Xatolik: ${failed} ta`);
     delete userStates[userId];
     delete advData[userId];
+
+    await sendAdvToAll(ctx, adv);
 });
 
 bot.action("cancel_adv_text", async (ctx) => {
     const userId = ctx.from.id;
-    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_text_confirm") {
-        return ctx.answerCbQuery("❌ Ruxsat yo'q yoki amal muddati o'tgan.");
-    }
+    if (userId !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
 
     await ctx.answerCbQuery("Bekor qilindi.");
     await ctx.reply("❌ Reklama yuborish bekor qilindi.");
@@ -303,16 +409,9 @@ bot.action("cancel_adv_text", async (ctx) => {
     delete advData[userId];
 });
 
-bot.action("cancel_adv", async (ctx) => {
-    const userId = ctx.from.id;
-    if (userId !== ADMIN_ID || userStates[userId] !== "waiting_for_confirmation") {
-        return ctx.answerCbQuery("❌ Ruxsat berilmagan yoki amal tugagan.");
-    }
-    await ctx.answerCbQuery("Reklama bekor qilindi.");
-    await ctx.reply("❌ Reklama yuborish bekor qilindi.");
-    delete userStates[userId];
-    delete advData[userId];
-});
+// ─────────────────────────────────────────────
+// XATOLARNI USHLASH
+// ─────────────────────────────────────────────
 
 bot.catch(async (err, ctx) => {
     console.error("BOT ERROR:", err);
