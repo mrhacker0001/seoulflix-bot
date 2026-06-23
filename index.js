@@ -175,7 +175,7 @@ bot.hears("📜 Kino roʻyxati", async (ctx) => {
         const film = doc.data();
         // ✅ Ko'rilgan soni ro'yxatda ham chiqadi
         const views = film.views || 0;
-        message += `\n🎬 *${film.title}* — Kod: \`${doc.id}\` | 👁 ${views} marta`;
+        message += `\n🎬 *${film.title}* — Kod: \`${doc.id}\``;
     });
     await ctx.reply(message, { parse_mode: "Markdown" });
 });
