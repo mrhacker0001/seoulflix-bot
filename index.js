@@ -18,10 +18,10 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHECK_CHANNELS = ["@seoulflixorg", "@sf17_fls"];
+const CHECK_CHANNELS = ["@seoulflixorg", "@sengaatalganlari"];
 const SHOW_CHANNELS = [
     { name: "1 - Asosiy kanal", url: "https://t.me/seoulflixorg" },
-    { name: "2 - Asosiy kanal", url: "https://t.me/sf17_fls" },
+    { name: "2 - Asosiy kanal", url: "https://t.me/sengaatalganlari" },
 ];
 
 // ─────────────────────────────────────────────
