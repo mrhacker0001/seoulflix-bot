@@ -18,10 +18,10 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHECK_CHANNELS = ["@seoulflixorg", "@sengaatalganlari"];
+const CHECK_CHANNELS = ["@seoulflixorg", "@asaxibek"];
 const SHOW_CHANNELS = [
     { name: "1 - Asosiy kanal", url: "https://t.me/seoulflixorg" },
-    { name: "2 - Asosiy kanal", url: "https://t.me/sengaatalganlari" },
+    { name: "Nefrit ortidan asosiy obraz (ASAXI)", url: "https://t.me/asaxibek" },
 ];
 
 // ─────────────────────────────────────────────
