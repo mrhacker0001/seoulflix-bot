@@ -18,10 +18,10 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHECK_CHANNELS = ["@seoulflixorg",];
+const CHECK_CHANNELS = ["@sf17_fls", "@asaxi_uz"];
 const SHOW_CHANNELS = [
-    { name: "1 - Asosiy kanal", url: "https://t.me/seoulflixorg" },
-    { name: "ASAXI TV", url: "https://t.me/+l8bMvYLsqztjNzNi" },
+    { name: "Asosiy kanal", url: "https://t.me/sf17_fls" },
+    { name: "ASAXI TV", url: "https://t.me/asaxi_uz" },
 ];
 
 // ─────────────────────────────────────────────
