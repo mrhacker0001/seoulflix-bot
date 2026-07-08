@@ -18,7 +18,7 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHECK_CHANNELS = ["@seoulflixorg", "-1002503433669"];
+const CHECK_CHANNELS = ["@seoulflixorg",];
 const SHOW_CHANNELS = [
     { name: "1 - Asosiy kanal", url: "https://t.me/seoulflixorg" },
     { name: "ASAXI TV", url: "https://t.me/+l8bMvYLsqztjNzNi" },
