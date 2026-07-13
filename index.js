@@ -18,10 +18,10 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHECK_CHANNELS = ["@asaxi_uz", "@sf17_fls"];
+const CHECK_CHANNELS = ["@asaxi_uz"];
 const SHOW_CHANNELS = [
     { name: "Asaxi tv", url: "https://t.me/asaxi_uz" },
-    { name: "SF", url: "https://t.me/sf17_fls" },
+    { name: "SX", url: "https://t.me/+jAaTGmkFwmA5M2Ey" },
 ];
 
 // ─────────────────────────────────────────────
