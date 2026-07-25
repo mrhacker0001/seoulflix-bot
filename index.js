@@ -18,11 +18,31 @@ const db = admin.firestore();
 const userStates = {};
 const advData = {};
 
-const CHECK_CHANNELS = ["@asaxi_uz", "@seoulflixorg"];
-const SHOW_CHANNELS = [
-    { name: "Asaxi tv", url: "https://t.me/asaxi_uz" },
-    { name: "SX", url: "https://t.me/seoulflixorg" },
-];
+let CHECK_CHANNELS = [];
+let SHOW_CHANNELS = [];
+
+async function loadChannels() {
+    const snapshot = await db.collection("channels").get();
+    CHECK_CHANNELS = snapshot.docs.map(doc => doc.data().channelId);
+    SHOW_CHANNELS = snapshot.docs.map(doc => ({ name: doc.data().name, url: doc.data().url }));
+}
+
+async function seedChannelsIfEmpty() {
+    const snapshot = await db.collection("channels").get();
+    if (snapshot.empty) {
+        const defaults = [
+            { id: "asaxi_uz", channelId: "@asaxi_uz", name: "Asaxi tv", url: "https://t.me/asaxi_uz" },
+            { id: "seoulflixorg", channelId: "@seoulflixorg", name: "SX", url: "https://t.me/seoulflixorg" },
+        ];
+        for (const ch of defaults) {
+            await db.collection("channels").doc(ch.id).set({
+                channelId: ch.channelId,
+                name: ch.name,
+                url: ch.url,
+            });
+        }
+    }
+}
 
 // ─────────────────────────────────────────────
 // YORDAMCHI FUNKSIYALAR
@@ -122,6 +142,7 @@ bot.start(async (ctx) => {
     const keyboard = [["📜 Kino roʻyxati", "🔍 Kino izlash"]];
     if (userId === ADMIN_ID) {
         keyboard.push(["📢 Reklama yuborish", "👥 Obunachilar soni"]);
+        keyboard.push(["📡 Majburiy kanallar"]);
     }
 
     try {
@@ -279,6 +300,61 @@ bot.hears("👥 Obunachilar soni", async (ctx) => {
     });
 });
 
+bot.hears("📡 Majburiy kanallar", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
+    await ctx.reply(
+        "📡 Majburiy obuna kanallarini boshqarish",
+        Markup.inlineKeyboard([
+            [Markup.button.callback("📋 Ro'yxat", "channels_list")],
+            [Markup.button.callback("➕ Kanal qo'shish", "channels_add")],
+            [Markup.button.callback("🗑 Kanal o'chirish", "channels_remove_menu")],
+        ])
+    );
+});
+
+bot.action("channels_list", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    if (CHECK_CHANNELS.length === 0) return ctx.reply("📭 Hozircha majburiy kanallar yo'q.");
+    let msg = "📋 *Majburiy kanallar ro'yxati:*\n";
+    CHECK_CHANNELS.forEach((id, i) => {
+        const show = SHOW_CHANNELS[i];
+        msg += `\n${i + 1}. ${show?.name || id} — \`${id}\``;
+    });
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+});
+
+bot.action("channels_add", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    userStates[ctx.from.id] = "waiting_for_channel_add";
+    await ctx.reply(
+        "➕ *Yangi kanal qo'shish*\n\nKanalning username'ini yuboring (masalan: @kanal_nomi).\n\n⚠️ Botni avval o'sha kanalga *admin* qilib qo'shing, aks holda obuna tekshiruvi ishlamaydi.",
+        { parse_mode: "Markdown" }
+    );
+});
+
+bot.action("channels_remove_menu", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    const snapshot = await db.collection("channels").get();
+    if (snapshot.empty) return ctx.reply("📭 Hozircha majburiy kanallar yo'q.");
+    const buttons = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return [Markup.button.callback(`🗑 ${data.name || data.channelId}`, `remove_channel:${doc.id}`)];
+    });
+    await ctx.reply("O'chirmoqchi bo'lgan kanalni tanlang:", Markup.inlineKeyboard(buttons));
+});
+
+bot.action(/^remove_channel:(.+)$/, async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    const docId = ctx.match[1];
+    await db.collection("channels").doc(docId).delete();
+    await loadChannels();
+    await ctx.answerCbQuery("✅ O'chirildi.");
+    await ctx.reply("✅ Kanal o'chirildi.");
+});
+
 bot.hears("📜 Kino roʻyxati", async (ctx) => {
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) return;
@@ -310,8 +386,36 @@ bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
 
     // Klaviatura tugmalarini o'tkazib yuborish
-    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni"];
+    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni", "📡 Majburiy kanallar"];
     if (keyboardButtons.includes(text)) return;
+
+    // ── ADMIN: yangi majburiy kanal qo'shish ──
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_channel_add") {
+        const username = text.trim();
+        if (!username.startsWith("@")) {
+            return ctx.reply("❌ Username @ bilan boshlanishi kerak. Masalan: @kanal_nomi");
+        }
+        try {
+            const chat = await bot.telegram.getChat(username);
+            const me = await bot.telegram.getMe();
+            const member = await bot.telegram.getChatMember(username, me.id);
+            if (!["administrator", "creator"].includes(member.status)) {
+                return ctx.reply("❌ Bot bu kanalda admin emas. Avval botni kanalga admin qilib qo'shing, so'ng qaytadan urinib ko'ring.");
+            }
+            const docId = username.replace("@", "");
+            await db.collection("channels").doc(docId).set({
+                channelId: username,
+                name: chat.title || username,
+                url: `https://t.me/${docId}`,
+            });
+            await loadChannels();
+            delete userStates[userId];
+            return ctx.reply(`✅ Kanal qo'shildi: ${chat.title || username}`);
+        } catch (err) {
+            console.error("Kanal qo'shishda xatolik:", err.message);
+            return ctx.reply("❌ Kanal topilmadi yoki botga ruxsat yo'q. Username to'g'riligini va bot kanalga qo'shilganini tekshiring.");
+        }
+    }
 
     // ── ADMIN: matnli reklama qabul qilish ──
     if (userId === ADMIN_ID && userStates[userId] === "waiting_for_adv_media") {
@@ -423,5 +527,9 @@ bot.catch(async (err, ctx) => {
     }
 });
 
-bot.launch();
-console.log("🚀 SeoulFlix Bot ishga tushdi!");
+(async () => {
+    await seedChannelsIfEmpty();
+    await loadChannels();
+    await bot.launch();
+    console.log("🚀 SeoulFlix Bot ishga tushdi!");
+})();
