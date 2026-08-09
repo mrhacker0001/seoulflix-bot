@@ -17,6 +17,36 @@ admin.initializeApp({
 const db = admin.firestore();
 const userStates = {};
 const advData = {};
+const filmDrafts = {};
+
+const FILM_OPTIONAL_STEPS = [
+    { key: "episode", label: "🎞️ Nechchi qismligini yuboring (masalan: 16 qism):" },
+    { key: "year", label: "🗓️ Chiqarilgan yilini yuboring (masalan: 2024):" },
+    { key: "translator", label: "🎧 Tarjimon nomini yuboring:" },
+    { key: "language", label: "🌐 Tilini yuboring (masalan: O'zbekcha):" },
+    { key: "genre", label: "📄 Janrini yuboring (masalan: Drama, Romantika):" },
+    { key: "description", label: "📕 Tavsifini yuboring:" },
+];
+
+async function askFilmStep(ctx, index) {
+    const userId = ctx.from.id;
+    if (index >= FILM_OPTIONAL_STEPS.length) {
+        userStates[userId] = "waiting_for_film_video";
+        return ctx.reply(
+            "🎥 Endi kino videosini yuboring (video fayl sifatida):",
+            Markup.inlineKeyboard([[Markup.button.callback("❌ Bekor qilish", "film_cancel")]])
+        );
+    }
+    const step = FILM_OPTIONAL_STEPS[index];
+    userStates[userId] = `waiting_for_film_${step.key}`;
+    await ctx.reply(
+        step.label,
+        Markup.inlineKeyboard([
+            [Markup.button.callback("⏭ Otkazib yuborish", "film_skip")],
+            [Markup.button.callback("❌ Bekor qilish", "film_cancel")],
+        ])
+    );
+}
 
 let CHECK_CHANNELS = [];
 let SHOW_CHANNELS = [];
@@ -142,7 +172,7 @@ bot.start(async (ctx) => {
     const keyboard = [["📜 Kino roʻyxati", "🔍 Kino izlash"]];
     if (userId === ADMIN_ID) {
         keyboard.push(["📢 Reklama yuborish", "👥 Obunachilar soni"]);
-        keyboard.push(["📡 Majburiy kanallar"]);
+        keyboard.push(["📡 Majburiy kanallar", "🎬 Drama qo'shish"]);
     }
 
     try {
@@ -200,6 +230,30 @@ bot.action("check_membership", async (ctx) => {
 
 bot.on("video", async (ctx) => {
     const userId = ctx.from.id;
+
+    // Admin yangi drama qo'shayotganda video yuborsa
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_film_video") {
+        const fileId = ctx.message.video.file_id;
+        const draft = filmDrafts[userId] || {};
+        const filmData = {
+            title: draft.title || "",
+            episode: draft.episode || "",
+            year: draft.year || "",
+            translator: draft.translator || "",
+            language: draft.language || "",
+            genre: draft.genre || "",
+            description: draft.description || "",
+            video_link: fileId,
+            views: 0,
+        };
+        await db.collection("films").doc(draft.code).set(filmData);
+        delete userStates[userId];
+        delete filmDrafts[userId];
+        return ctx.reply(
+            `✅ Drama muvaffaqiyatli qo'shildi!\n\n🎬 *${filmData.title}*\n🔑 Kod: \`${draft.code}\``,
+            { parse_mode: "Markdown" }
+        );
+    }
 
     // Admin reklama uchun video yuborayotgan bo'lsa
     if (userId === ADMIN_ID && userStates[userId] === "waiting_for_adv_media") {
@@ -355,6 +409,53 @@ bot.action(/^remove_channel:(.+)$/, async (ctx) => {
     await ctx.reply("✅ Kanal o'chirildi.");
 });
 
+bot.hears("🎬 Drama qo'shish", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
+    userStates[ctx.from.id] = "waiting_for_film_code";
+    filmDrafts[ctx.from.id] = {};
+    await ctx.reply(
+        "🎬 *Yangi drama qo'shish*\n\nAvval kino kodini yuboring (masalan: 0001). Foydalanuvchilar shu kod orqali kinoni topadi.",
+        { parse_mode: "Markdown" }
+    );
+});
+
+bot.action("film_skip", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    const state = userStates[ctx.from.id];
+    await ctx.answerCbQuery();
+    if (!state || !state.startsWith("waiting_for_film_")) return;
+    const key = state.replace("waiting_for_film_", "");
+    const idx = FILM_OPTIONAL_STEPS.findIndex(s => s.key === key);
+    if (idx === -1) return;
+    await askFilmStep(ctx, idx + 1);
+});
+
+bot.action("film_cancel", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    delete userStates[ctx.from.id];
+    delete filmDrafts[ctx.from.id];
+    await ctx.answerCbQuery("Bekor qilindi.");
+    await ctx.reply("❌ Drama qo'shish bekor qilindi.");
+});
+
+bot.action("film_overwrite_yes", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    userStates[ctx.from.id] = "waiting_for_film_title";
+    await ctx.reply(
+        "🎬 Endi drama nomini yuboring:",
+        Markup.inlineKeyboard([[Markup.button.callback("❌ Bekor qilish", "film_cancel")]])
+    );
+});
+
+bot.action("film_overwrite_no", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    userStates[ctx.from.id] = "waiting_for_film_code";
+    delete filmDrafts[ctx.from.id];
+    await ctx.reply("🔁 Yangi kino kodini yuboring:");
+});
+
 bot.hears("📜 Kino roʻyxati", async (ctx) => {
     const subscribed = await checkSubscription(ctx);
     if (!subscribed) return;
@@ -386,8 +487,52 @@ bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
 
     // Klaviatura tugmalarini o'tkazib yuborish
-    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni", "📡 Majburiy kanallar"];
+    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni", "📡 Majburiy kanallar", "🎬 Drama qo'shish"];
     if (keyboardButtons.includes(text)) return;
+
+    // ── ADMIN: yangi drama qo'shish — kino kodi ──
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_film_code") {
+        const code = text;
+        if (code.includes("/")) {
+            return ctx.reply("❌ Kodda \"/\" belgisi bo'lishi mumkin emas. Boshqa kod yuboring:");
+        }
+        const existing = await db.collection("films").doc(code).get();
+        filmDrafts[userId] = { code };
+        if (existing.exists) {
+            return ctx.reply(
+                `⚠️ "${code}" kodli drama allaqachon mavjud. Ustidan yozilsinmi?`,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback("✅ Ustidan yozish", "film_overwrite_yes")],
+                    [Markup.button.callback("🔁 Boshqa kod kiritish", "film_overwrite_no")],
+                    [Markup.button.callback("❌ Bekor qilish", "film_cancel")],
+                ])
+            );
+        }
+        userStates[userId] = "waiting_for_film_title";
+        return ctx.reply(
+            "🎬 Endi drama nomini yuboring:",
+            Markup.inlineKeyboard([[Markup.button.callback("❌ Bekor qilish", "film_cancel")]])
+        );
+    }
+
+    // ── ADMIN: yangi drama qo'shish — nomi ──
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_film_title") {
+        filmDrafts[userId].title = text;
+        return askFilmStep(ctx, 0);
+    }
+
+    // ── ADMIN: yangi drama qo'shish — ixtiyoriy maydonlar ──
+    if (userId === ADMIN_ID && userStates[userId] && userStates[userId].startsWith("waiting_for_film_")) {
+        const key = userStates[userId].replace("waiting_for_film_", "");
+        if (key === "video") {
+            return ctx.reply("❗️ Iltimos, video fayl sifatida yuboring (matn emas).");
+        }
+        const idx = FILM_OPTIONAL_STEPS.findIndex(s => s.key === key);
+        if (idx !== -1) {
+            filmDrafts[userId][key] = text;
+            return askFilmStep(ctx, idx + 1);
+        }
+    }
 
     // ── ADMIN: yangi majburiy kanal qo'shish ──
     if (userId === ADMIN_ID && userStates[userId] === "waiting_for_channel_add") {
