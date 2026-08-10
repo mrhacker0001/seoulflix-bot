@@ -50,6 +50,12 @@ async function askFilmStep(ctx, index) {
 
 let CHECK_CHANNELS = [];
 let SHOW_CHANNELS = [];
+let VIP_USERNAMES = new Set();
+
+async function loadVipUsers() {
+    const snapshot = await db.collection("vipUsers").get();
+    VIP_USERNAMES = new Set(snapshot.docs.map(doc => doc.id));
+}
 
 async function loadChannels() {
     const snapshot = await db.collection("channels").get();
@@ -173,6 +179,7 @@ bot.start(async (ctx) => {
     if (userId === ADMIN_ID) {
         keyboard.push(["📢 Reklama yuborish", "👥 Obunachilar soni"]);
         keyboard.push(["📡 Majburiy kanallar", "🎬 Drama qo'shish"]);
+        keyboard.push(["⭐ Yuklab olish ruxsati"]);
     }
 
     try {
@@ -409,6 +416,50 @@ bot.action(/^remove_channel:(.+)$/, async (ctx) => {
     await ctx.reply("✅ Kanal o'chirildi.");
 });
 
+bot.hears("⭐ Yuklab olish ruxsati", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
+    await ctx.reply(
+        "⭐ Videoni himoyasiz (yuklab olish/forward qilish mumkin) holatda oladigan foydalanuvchilar",
+        Markup.inlineKeyboard([
+            [Markup.button.callback("📋 Ro'yxat", "vip_list")],
+            [Markup.button.callback("➕ Foydalanuvchi qo'shish", "vip_add")],
+            [Markup.button.callback("🗑 Foydalanuvchi o'chirish", "vip_remove_menu")],
+        ])
+    );
+});
+
+bot.action("vip_list", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    if (VIP_USERNAMES.size === 0) return ctx.reply("📭 Hozircha ruxsat berilgan foydalanuvchilar yo'q.");
+    const list = [...VIP_USERNAMES].map((u, i) => `${i + 1}. @${u}`).join("\n");
+    await ctx.reply(`⭐ *Ruxsat berilgan foydalanuvchilar:*\n\n${list}`, { parse_mode: "Markdown" });
+});
+
+bot.action("vip_add", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    userStates[ctx.from.id] = "waiting_for_vip_add";
+    await ctx.reply("➕ Foydalanuvchi username'ini yuboring (masalan: @username):");
+});
+
+bot.action("vip_remove_menu", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    await ctx.answerCbQuery();
+    if (VIP_USERNAMES.size === 0) return ctx.reply("📭 Hozircha ruxsat berilgan foydalanuvchilar yo'q.");
+    const buttons = [...VIP_USERNAMES].map(u => [Markup.button.callback(`🗑 @${u}`, `remove_vip:${u}`)]);
+    await ctx.reply("O'chirmoqchi bo'lgan foydalanuvchini tanlang:", Markup.inlineKeyboard(buttons));
+});
+
+bot.action(/^remove_vip:(.+)$/, async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery("❌ Ruxsat yo'q.");
+    const uname = ctx.match[1];
+    await db.collection("vipUsers").doc(uname).delete();
+    await loadVipUsers();
+    await ctx.answerCbQuery("✅ O'chirildi.");
+    await ctx.reply(`✅ @${uname} ro'yxatdan o'chirildi.`);
+});
+
 bot.hears("🎬 Drama qo'shish", async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Siz admin emassiz!");
     userStates[ctx.from.id] = "waiting_for_film_code";
@@ -487,8 +538,24 @@ bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
 
     // Klaviatura tugmalarini o'tkazib yuborish
-    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni", "📡 Majburiy kanallar", "🎬 Drama qo'shish"];
+    const keyboardButtons = ["📜 Kino roʻyxati", "🔍 Kino izlash", "📢 Reklama yuborish", "👥 Obunachilar soni", "📡 Majburiy kanallar", "🎬 Drama qo'shish", "⭐ Yuklab olish ruxsati"];
     if (keyboardButtons.includes(text)) return;
+
+    // ── ADMIN: yuklab olish ruxsati uchun foydalanuvchi qo'shish ──
+    if (userId === ADMIN_ID && userStates[userId] === "waiting_for_vip_add") {
+        const username = text.trim();
+        if (!username.startsWith("@")) {
+            return ctx.reply("❌ Username @ bilan boshlanishi kerak. Masalan: @username");
+        }
+        const docId = username.replace("@", "").toLowerCase();
+        await db.collection("vipUsers").doc(docId).set({
+            username: docId,
+            addedAt: admin.firestore.Timestamp.now(),
+        });
+        await loadVipUsers();
+        delete userStates[userId];
+        return ctx.reply(`✅ @${docId} endi videoni himoyasiz (yuklab olish/forward qilish mumkin) holatda oladi.`);
+    }
 
     // ── ADMIN: yangi drama qo'shish — kino kodi ──
     if (userId === ADMIN_ID && userStates[userId] === "waiting_for_film_code") {
@@ -598,10 +665,13 @@ bot.on("text", async (ctx) => {
             if (film.description) caption += `\n📕 *Tavsifi:*\n${film.description}\n`;
             caption += `\n👁 *Ko'rilgan:* ${updatedViews} marta`;
 
+            const requesterUsername = (ctx.from.username || "").toLowerCase();
+            const isVip = VIP_USERNAMES.has(requesterUsername);
+
             await ctx.replyWithVideo(film.video_link, {
                 caption,
                 parse_mode: "Markdown",
-                protect_content: true
+                protect_content: !isVip
             });
         } catch (err) {
             console.error("Video yuborishda xatolik:", err.message);
@@ -675,6 +745,7 @@ bot.catch(async (err, ctx) => {
 (async () => {
     await seedChannelsIfEmpty();
     await loadChannels();
+    await loadVipUsers();
     await bot.launch();
     console.log("🚀 SeoulFlix Bot ishga tushdi!");
 })();
